@@ -325,12 +325,26 @@ class TestDynamicClient(unittest.TestCase):
         client = DynamicClient(api_client.ApiClient(configuration=self.config))
         api = client.resources.get(api_version='v1', kind='ConfigMap')
 
+        # prepare test namespace
+        ns_name = 'test-ns-' + short_uuid()
+        test_ns = {
+            "kind": "Namespace",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": ns_name,
+            },
+        }
+        resp = api.create(
+            body=test_ns)
+        self.assertEqual(ns_name, resp.metadata.name)
+
         name = 'test-configmap-' + short_uuid()
         test_configmap = {
             "kind": "ConfigMap",
             "apiVersion": "v1",
             "metadata": {
                 "name": name,
+                "namespace": ns_name,
             },
             "data": {
                 "config.json": "{\"command\":\"/usr/bin/mysqld_safe\"}",
@@ -339,23 +353,26 @@ class TestDynamicClient(unittest.TestCase):
         }
 
         resp = api.create(
-            body=test_configmap, namespace='default'
+            body=test_configmap, namespace=ns_name
         )
         self.assertEqual(name, resp.metadata.name)
 
         resp = api.get(
-            name=name, namespace='default')
+            name=name, namespace=ns_name)
         self.assertEqual(name, resp.metadata.name)
 
         test_configmap['data']['config.json'] = "{}"
         resp = api.patch(
-            name=name, namespace='default', body=test_configmap)
+            name=name, namespace=ns_name, body=test_configmap)
 
         resp = api.delete(
-            name=name, body={}, namespace='default')
+            name=name, body={}, namespace=ns_name)
 
-        resp = api.get(namespace='default', pretty=True)
+        resp = api.get(namespace=ns_name, pretty=True)
         self.assertEqual([], resp.items)
+
+        # clean up test namespace
+        api.delete(name=test_ns)
 
     def test_node_apis(self):
         client = DynamicClient(api_client.ApiClient(configuration=self.config))
